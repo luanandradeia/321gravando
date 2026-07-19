@@ -1,0 +1,14 @@
+services:
+  321gravando:
+    build: .
+    container_name: 321gravando-app
+    command: npm run dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dashboard/public/media:/app/dashboard/public/media
+      - ./.env:/app/.env
+    shm_size: '2gb' # Previne que o Chromium quebre por falta de memória compartilhada
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

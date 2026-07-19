@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>321gravando - Gravações & Atas</title>
+  
+  <!-- Fontes Premium -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Icones (FontAwesome) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- CSS Principal -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Marked.js (Conversor Markdown para HTML em tempo real) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  
+  <div class="bg-glow"></div>
+ 
+  <!-- Cabeçalho -->
+  <header>
+    <div class="logo">
+      <div class="logo-dot"></div>
+      321gravando
+    </div>
+    <div class="status-badge" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">Sistema Ativo</span>
+    </div>
+  </header>
+
+  <!-- Corpo Principal -->
+  <div class="container">
+    
+    <!-- Barra Lateral: Controles & Lista de Gravações -->
+    <aside class="sidebar">
+      
+      <!-- Painel de Controle de Gravação -->
+      <div class="control-panel">
+        <h3>Nova Gravação</h3>
+        <div class="control-group">
+          <input type="url" id="meetUrlInput" placeholder="Link do Google Meet...">
+          <button id="btnToggleRecording" class="btn-control btn-start">
+            <i class="fa-solid fa-play"></i> Iniciar Gravação
+          </button>
+        </div>
+        <div class="recording-timer" id="recordingTimerContainer" style="display: none;">
+          <div class="timer-dot"></div>
+          <span>Em andamento: <strong id="timerText">00:00:00</strong></span>
+        </div>
+      </div>
+
+      <div class="search-box">
+        <div class="search-wrapper" style="margin-bottom: 10px;">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input type="text" id="searchInput" placeholder="Pesquisar reuniões...">
+        </div>
+        <div class="date-filter-wrapper" style="display: flex; gap: 8px; align-items: center;">
+          <input type="date" id="dateFilterInput" style="flex: 1; padding: 8px 12px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: inherit; font-size: 0.85rem; outline: none; transition: var(--transition);">
+          <button id="btnClearDateFilter" class="btn" style="padding: 8px 12px; display: none;" title="Limpar Filtro de Data">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="meetings-list" id="meetingsList">
+        <!-- Inserido dinamicamente via JS -->
+        <div class="empty-list">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <p>Carregando reuniões...</p>
+        </div>
+      </div>
+      
+      <!-- Configurações de API -->
+      <div class="settings-panel" style="padding: 16px 24px; border-top: 1px solid var(--glass-border); background: rgba(0, 0, 0, 0.15); margin-top: auto; display: flex; flex-direction: column; gap: 12px;">
+        <div class="settings-header" id="btnToggleSettings" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
+          <span><i class="fa-solid fa-gear"></i> Configurações da API</span>
+          <i class="fa-solid fa-chevron-up toggle-icon" id="settingsToggleIcon" style="transition: transform 0.3s; transform: rotate(180deg);"></i>
+        </div>
+        <div class="settings-body" id="settingsBody" style="display: none; flex-direction: column; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="groqKeyInput" style="font-size: 0.75rem; color: var(--text-muted);">Groq API Key:</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="password" id="groqKeyInput" placeholder="gsk_..." style="flex: 1; padding: 8px 12px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: inherit; font-size: 0.85rem; outline: none; transition: var(--transition);">
+              <button id="btnSaveGroqKey" class="btn btn-primary" style="padding: 8px 12px; font-size: 0.85rem;">Salvar</button>
+            </div>
+            <small id="groqKeyStatus" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Carregando...</small>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
+            <label for="botNameInput" style="font-size: 0.75rem; color: var(--text-muted);">Nome do Bot no Meet:</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="botNameInput" placeholder="Notetaker Assistant" style="flex: 1; padding: 8px 12px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: inherit; font-size: 0.85rem; outline: none; transition: var(--transition);">
+              <button id="btnSaveBotName" class="btn btn-primary" style="padding: 8px 12px; font-size: 0.85rem;">Salvar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Palco Principal: Conteúdo Selecionado -->
+    <main class="main-stage" id="mainStage">
+      
+      <!-- Estado Vazio (Antes de escolher uma reunião) -->
+      <div class="stage-empty" id="stageEmpty">
+        <i class="fa-regular fa-folder-open"></i>
+        <h2>Nenhuma Reunião Selecionada</h2>
+        <p>Escolha uma reunião na barra lateral para assistir ao vídeo e conferir a ata detalhada.</p>
+      </div>
+
+      <!-- Exibição da Reunião Ativa -->
+      <div class="stage-content" id="stageContent" style="display: none;">
+        <div class="content-grid">
+          
+          <!-- Coluna 1: Vídeo & Ações -->
+          <div class="video-column">
+            <div class="video-container">
+              <video id="videoPlayer" controls>
+                <source src="" type="video/mp4">
+                Seu navegador não suporta reprodução de vídeos HTML5.
+              </video>
+            </div>
+            
+            <div class="session-info-header">
+              <div class="title-action-wrapper" style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 8px;">
+                <h2 id="sessionTitle" style="margin-bottom: 0; font-size: 1.4rem;">Ata da Reunião</h2>
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn" id="btnEditTitle" style="padding: 6px 10px;" title="Renomear Reunião">
+                    <i class="fa-solid fa-pen" style="font-size: 0.9rem;"></i>
+                  </button>
+                  <button class="btn" id="btnDeleteMeeting" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #fca5a5;" title="Excluir Reunião">
+                    <i class="fa-solid fa-trash" style="font-size: 0.9rem;"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="metadata">
+                <span><i class="fa-regular fa-calendar-days"></i> <span id="sessionDate">Carregando...</span></span>
+              </div>
+            </div>
+            
+            <div class="action-bar">
+              <a href="#" class="btn btn-primary" id="btnDownloadVideo" download>
+                <i class="fa-solid fa-video"></i> Baixar Vídeo (.mp4)
+              </a>
+              <a href="#" class="btn" id="btnDownloadMarkdown" download>
+                <i class="fa-solid fa-file-arrow-down"></i> Baixar Ata (.md)
+              </a>
+            </div>
+          </div>
+          
+          <!-- Coluna 2: Ata de Reunião Markdown -->
+          <div class="document-column">
+            <article class="markdown-body" id="markdownRender">
+              <!-- Conteúdo da Ata Renderizado via Marked.js -->
+            </article>
+          </div>
+
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Lógica Frontend -->
+  <script src="app.js"></script>
+</body>
+</html>

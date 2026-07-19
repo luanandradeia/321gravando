@@ -1,0 +1,20 @@
+{
+  "name": "321gravando",
+  "version": "1.0.0",
+  "description": "Gravador e transcritor automatizado de Google Meet para servidor doméstico Debian 13",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "gravar": "node index.js",
+    "dashboard": "node dashboard/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "fluent-ffmpeg": "^2.1.3",
+    "groq-sdk": "^0.3.3",
+    "puppeteer-core": "^22.12.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}

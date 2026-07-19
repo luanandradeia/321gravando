@@ -1,0 +1,2 @@
+# Mantém esta pasta no controle de versão para que a estrutura de pastas do Docker funcione corretamente no GitHub.
+# As gravações reais (.mp4 e .md) estão ignoradas pelo arquivo .gitignore principal.
