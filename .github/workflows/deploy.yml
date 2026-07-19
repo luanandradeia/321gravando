@@ -1,0 +1,20 @@
+name: CD - Deploy no Servidor Debian 13
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # Roda no runner local instalado no seu servidor doméstico
+    runs-on: self-hosted
+
+    steps:
+      - name: Baixar Código Atualizado (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Reconstruir e Reiniciar Container Docker
+        run: |
+          docker compose down
+          docker compose up --build -d
