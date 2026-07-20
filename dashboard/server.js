@@ -7,24 +7,94 @@ import { startRecording, stopRecording } from '../src/recorder.js';
 import { processAudioPipeline } from '../src/audio.js';
 import { transcribeAndSummarize } from '../src/groq.js';
 
-dotenv.config();
-
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 const currentDir = path.resolve();
 const publicDir = path.join(currentDir, 'dashboard', 'public');
 const mediaDir = path.join(publicDir, 'media');
+const configFilePath = path.join(mediaDir, 'config.json');
 
 // Garante as pastas necessárias
 if (!fs.existsSync(mediaDir)) {
   fs.mkdirSync(mediaDir, { recursive: true });
 }
 
-app.use(express.json());
+// Carrega configurações do .env e do config.json no volume persistente
+function loadPersistentSettings() {
+  const envPath = path.join(currentDir, '.env');
+  if (fs.existsSync(envPath)) {
+    try {
+      const stat = fs.statSync(envPath);
+      if (stat.isFile()) {
+        dotenv.config();
+      }
+    } catch (e) {
+      console.warn('[Settings] Não foi possível carregar o arquivo .env:', e.message);
+    }
+  }
 
-// Código de Autenticação e Sessão
-const AUTH_CODE = '123gravar';
+  if (fs.existsSync(configFilePath)) {
+    try {
+      const configData = JSON.parse(fs.readFileSync(configFilePath, 'utf-8'));
+      if (configData.GROQ_API_KEY) {
+        process.env.GROQ_API_KEY = configData.GROQ_API_KEY;
+      }
+      if (configData.BOT_NAME) {
+        process.env.BOT_NAME = configData.BOT_NAME;
+      }
+      console.log('[Settings] Configurações carregadas com sucesso do config.json no volume persistente.');
+    } catch (e) {
+      console.error('[Settings] Erro ao analisar o config.json:', e.message);
+    }
+  }
+}
+
+loadPersistentSettings();
+
+// Helper para salvar de forma persistente e segura contra erros do Docker (.env como pasta)
+function saveSettings(key, value) {
+  process.env[key] = value;
+
+  // Salva no config.json do volume persistente de mídias
+  let configData = {};
+  if (fs.existsSync(configFilePath)) {
+    try {
+      configData = JSON.parse(fs.readFileSync(configFilePath, 'utf-8'));
+    } catch (e) {
+      configData = {};
+    }
+  }
+  configData[key] = value;
+  fs.writeFileSync(configFilePath, JSON.stringify(configData, null, 2), 'utf-8');
+
+  // Tenta salvar no .env local (se for arquivo e não pasta criada pelo Docker)
+  const envPath = path.join(currentDir, '.env');
+  try {
+    if (fs.existsSync(envPath) && fs.statSync(envPath).isDirectory()) {
+      return;
+    }
+    let content = '';
+    if (fs.existsSync(envPath)) {
+      content = fs.readFileSync(envPath, 'utf-8');
+    }
+    const lines = content.split('\n');
+    let found = false;
+    const newLines = lines.map(line => {
+      if (line.trim().startsWith(`${key}=`)) {
+        found = true;
+        return `${key}=${value}`;
+      }
+      return line;
+    });
+    if (!found) {
+      newLines.push(`${key}=${value}`);
+    }
+    fs.writeFileSync(envPath, newLines.join('\n'), 'utf-8');
+  } catch (e) {
+    console.warn(`[Settings] Não foi possível salvar no .env: ${e.message}`);
+  }
+}
 
 function parseCookies(cookieHeader) {
   const list = {};
@@ -539,7 +609,7 @@ app.get('/api/settings', (req, res) => {
 });
 
 /**
- * API: Salvar chave API do Groq no arquivo .env e na memória
+ * API: Salvar chave API do Groq no config.json e na memória
  */
 app.post('/api/settings/groq-key', (req, res) => {
   const { apiKey } = req.body;
@@ -549,45 +619,17 @@ app.post('/api/settings/groq-key', (req, res) => {
   }
 
   try {
-    const trimmedKey = apiKey.trim();
-    
-    // Atualiza na memória para uso imediato do servidor Express
-    process.env.GROQ_API_KEY = trimmedKey;
-    
-    // Atualiza no arquivo .env
-    const envPath = path.join(currentDir, '.env');
-    let content = '';
-    if (fs.existsSync(envPath)) {
-      content = fs.readFileSync(envPath, 'utf-8');
-    }
-    
-    const lines = content.split('\n');
-    let keyFound = false;
-    
-    const newLines = lines.map(line => {
-      if (line.trim().startsWith('GROQ_API_KEY=')) {
-        keyFound = true;
-        return `GROQ_API_KEY=${trimmedKey}`;
-      }
-      return line;
-    });
-    
-    if (!keyFound) {
-      newLines.push(`GROQ_API_KEY=${trimmedKey}`);
-    }
-    
-    fs.writeFileSync(envPath, newLines.join('\n'), 'utf-8');
-    console.log('[Dashboard API] Chave API do Groq salva com sucesso no arquivo .env.');
-    
+    saveSettings('GROQ_API_KEY', apiKey.trim());
+    console.log('[Dashboard API] Chave API do Groq salva de forma persistente.');
     res.json({ success: true });
   } catch (err) {
-    console.error('[Dashboard API] Erro ao salvar chave API no .env:', err);
-    res.status(500).json({ error: 'Erro ao salvar chave API no arquivo de configurações.' });
+    console.error('[Dashboard API] Erro ao salvar chave API:', err);
+    res.status(500).json({ error: 'Erro ao salvar chave API no volume de mídias.' });
   }
 });
 
 /**
- * API: Salvar o nome do bot do Google Meet no .env e na memória
+ * API: Salvar o nome do bot do Google Meet no config.json e na memória
  */
 app.post('/api/settings/bot-name', (req, res) => {
   const { botName } = req.body;
@@ -597,40 +639,12 @@ app.post('/api/settings/bot-name', (req, res) => {
   }
 
   try {
-    const trimmedName = botName.trim();
-    
-    // Atualiza na memória para as próximas execuções
-    process.env.BOT_NAME = trimmedName;
-    
-    // Atualiza no arquivo .env
-    const envPath = path.join(currentDir, '.env');
-    let content = '';
-    if (fs.existsSync(envPath)) {
-      content = fs.readFileSync(envPath, 'utf-8');
-    }
-    
-    const lines = content.split('\n');
-    let nameFound = false;
-    
-    const newLines = lines.map(line => {
-      if (line.trim().startsWith('BOT_NAME=')) {
-        nameFound = true;
-        return `BOT_NAME="${trimmedName}"`;
-      }
-      return line;
-    });
-    
-    if (!nameFound) {
-      newLines.push(`BOT_NAME="${trimmedName}"`);
-    }
-    
-    fs.writeFileSync(envPath, newLines.join('\n'), 'utf-8');
-    console.log(`[Dashboard API] Nome do bot salvo com sucesso no arquivo .env: "${trimmedName}"`);
-    
+    saveSettings('BOT_NAME', botName.trim());
+    console.log(`[Dashboard API] Nome do bot salvo com sucesso: "${botName.trim()}"`);
     res.json({ success: true });
   } catch (err) {
-    console.error('[Dashboard API] Erro ao salvar nome do bot no .env:', err);
-    res.status(500).json({ error: 'Erro ao salvar o nome do bot no arquivo de configurações.' });
+    console.error('[Dashboard API] Erro ao salvar nome do bot:', err);
+    res.status(500).json({ error: 'Erro ao salvar o nome do bot no volume de mídias.' });
   }
 });
 
