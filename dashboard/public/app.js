@@ -76,6 +76,21 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveGroqKey.addEventListener('click', saveGroqApiKey);
   btnSaveBotName.addEventListener('click', saveBotName);
   fetchGroqKeySettings();
+
+  // Botão de Logout no Header
+  const btnLogout = document.getElementById('btnLogout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', async () => {
+      if (confirm('Deseja realmente sair do painel do 321gravando?')) {
+        try {
+          await fetch('/api/logout', { method: 'POST' });
+          window.location.href = '/login.html';
+        } catch (err) {
+          alert('Erro ao realizar logout.');
+        }
+      }
+    });
+  }
 });
 
 /**
@@ -84,6 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
 async function syncRecordingStatus() {
   try {
     const response = await fetch('/api/recording/status');
+    if (response.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
     const newState = await response.json();
     
     // Detecta mudança de estado para atualizar a lista de reuniões
@@ -257,6 +276,10 @@ async function toggleRecording() {
 async function fetchMeetings() {
   try {
     const response = await fetch('/api/meetings');
+    if (response.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
     meetings = await response.json();
     renderMeetingsList(meetings);
   } catch (error) {

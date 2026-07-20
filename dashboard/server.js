@@ -22,7 +22,72 @@ if (!fs.existsSync(mediaDir)) {
 }
 
 app.use(express.json());
+
+// Código de Autenticação e Sessão
+const AUTH_CODE = '123gravar';
+
+function parseCookies(cookieHeader) {
+  const list = {};
+  if (!cookieHeader) return list;
+  cookieHeader.split(';').forEach(cookie => {
+    const parts = cookie.split('=');
+    list[parts.shift().trim()] = decodeURI(parts.join('='));
+  });
+  return list;
+}
+
+function checkAuth(req, res, next) {
+  const pathName = req.path;
+  
+  // Recursos e rotas públicas
+  if (
+    pathName === '/login.html' || 
+    pathName === '/api/login' || 
+    pathName === '/style.css'
+  ) {
+    return next();
+  }
+  
+  // Protege o index HTML, rotas de mídias e APIs
+  if (
+    pathName === '/' || 
+    pathName === '/index.html' || 
+    pathName.startsWith('/api/') || 
+    pathName.startsWith('/media/')
+  ) {
+    const cookies = parseCookies(req.headers.cookie || '');
+    if (cookies.session === AUTH_CODE) {
+      return next();
+    }
+    
+    if (pathName.startsWith('/api/') || pathName.startsWith('/media/')) {
+      return res.status(401).json({ error: 'Não autorizado.' });
+    }
+    
+    return res.redirect('/login.html');
+  }
+  
+  next();
+}
+
+app.use(checkAuth);
 app.use(express.static(publicDir));
+
+// Endpoint: Realizar Login
+app.post('/api/login', (req, res) => {
+  const { code } = req.body;
+  if (code === AUTH_CODE) {
+    res.setHeader('Set-Cookie', `session=${AUTH_CODE}; Path=/; HttpOnly; Max-Age=2592000; SameSite=Lax`);
+    return res.json({ success: true });
+  }
+  res.status(401).json({ error: 'Código de acesso incorreto.' });
+});
+
+// Endpoint: Realizar Logout
+app.post('/api/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax');
+  res.json({ success: true });
+});
 
 // Estados de gravação em memória
 let isRecording = false;

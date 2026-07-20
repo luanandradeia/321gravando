@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>321gravando - Login</title>
+  
+  <!-- Fontes Premium -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Icones (FontAwesome) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- CSS Principal para carregar variáveis -->
+  <link rel="stylesheet" href="style.css">
+  
+  <style>
+    .login-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      width: 100vw;
+      padding: 20px;
+      position: relative;
+      z-index: 2;
+    }
+    .login-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-main);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      width: 100%;
+      max-width: 400px;
+      padding: 40px 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      text-align: center;
+      animation: fadeIn 0.6s ease-out;
+    }
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .login-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #fff 0%, var(--text-muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .login-logo-dot {
+      width: 14px;
+      height: 14px;
+      background-color: #ef4444;
+      border-radius: 50%;
+      box-shadow: 0 0 12px #ef4444;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 18px #ef4444; }
+      100% { transform: scale(0.9); opacity: 0.6; }
+    }
+    .login-description {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .form-group {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+    }
+    .form-group label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .input-field {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(2, 6, 17, 0.6);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+      transition: var(--transition);
+    }
+    .input-field:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+    .btn-login {
+      width: 100%;
+      padding: 14px;
+      background: var(--primary);
+      border: 1px solid var(--primary-hover);
+      border-radius: var(--radius-md);
+      color: #fff;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-login:hover {
+      background: var(--primary-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+    .btn-login:active {
+      transform: translateY(0);
+    }
+    .error-msg {
+      color: #f87171;
+      font-size: 0.85rem;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      width: 100%;
+      display: none;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="bg-glow"></div>
+
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="login-logo-dot"></div>
+        321gravando
+      </div>
+      <p class="login-description">Digite o código de acesso para entrar no painel de gravações e atas.</p>
+      
+      <div class="error-msg" id="errorMsg">Código incorreto! Tente novamente.</div>
+      
+      <div class="form-group">
+        <label for="accessCode">Código de Acesso:</label>
+        <input type="password" id="accessCode" class="input-field" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      
+      <button class="btn-login" id="btnLogin">
+        <i class="fa-solid fa-right-to-bracket"></i> Entrar
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const accessCodeInput = document.getElementById('accessCode');
+    const btnLogin = document.getElementById('btnLogin');
+    const errorMsg = document.getElementById('errorMsg');
+
+    async function handleLogin() {
+      const code = accessCodeInput.value;
+      if (!code) return;
+
+      errorMsg.style.display = 'none';
+      btnLogin.disabled = true;
+      btnLogin.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Entrando...';
+
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          window.location.href = '/';
+        } else {
+          errorMsg.style.display = 'block';
+          accessCodeInput.value = '';
+          accessCodeInput.focus();
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Erro de conexão com o servidor.';
+        errorMsg.style.display = 'block';
+      } finally {
+        btnLogin.disabled = false;
+        btnLogin.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Entrar';
+      }
+    }
+
+    btnLogin.addEventListener('click', handleLogin);
+    accessCodeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        handleLogin();
+      }
+    });
+    
+    accessCodeInput.focus();
+  </script>
+</body>
+</html>
