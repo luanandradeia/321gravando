@@ -9,6 +9,7 @@ import { transcribeAndSummarize } from '../src/groq.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+const AUTH_CODE = '123gravar';
 
 const currentDir = path.resolve();
 const publicDir = path.join(currentDir, 'dashboard', 'public');
