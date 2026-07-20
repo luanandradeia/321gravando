@@ -140,6 +140,7 @@ function checkAuth(req, res, next) {
   next();
 }
 
+app.use(express.json());
 app.use(checkAuth);
 app.use(express.static(publicDir));
 
