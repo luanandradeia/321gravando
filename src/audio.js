@@ -35,11 +35,10 @@ export async function processAudioPipeline(videoPath, tempDir) {
 
   console.log('[Audio] Iniciando pipeline de processamento do áudio...');
 
-  // Passo 1: Extração + Remoção de Silêncio + Aceleração 1.5x
-  // Filtro de silêncio: silenceremove=stop_periods=-1:stop_duration=2:stop_threshold=-45dB
+  // Passo 1: Extração + Aceleração 1.5x (sem remover silêncio para manter a linearidade temporal)
   // Filtro de tempo: atempo=1.5 (mantém o tom natural)
-  console.log('[Audio] Passo 1/2: Extraindo, removendo silêncio e acelerando áudio (1.5x)...');
-  const processCmd = `ffmpeg -y -i "${videoPath}" -vn -filter:a "silenceremove=stop_periods=-1:stop_duration=2:stop_threshold=-45dB,atempo=1.5" -acodec libmp3lame -q:a 2 "${processedAudioPath}"`;
+  console.log('[Audio] Passo 1/2: Extraindo e acelerando áudio (1.5x) de forma linear...');
+  const processCmd = `ffmpeg -y -i "${videoPath}" -vn -filter:a "atempo=1.5" -acodec libmp3lame -q:a 2 "${processedAudioPath}"`;
   
   await execPromise(processCmd);
   console.log('[Audio] Áudio processado com sucesso.');

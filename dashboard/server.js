@@ -169,6 +169,7 @@ let activeMeetUrl = '';
 let recordingStartTime = null;
 let ffmpegProcess = null;
 let browserInstance = null;
+let browserPage = null;
 
 // Rastreamento de transcrições em andamento em segundo plano
 const activeTranscriptions = new Set();
@@ -270,6 +271,7 @@ async function runStartRecordingFlow(url, rawVideoPath, tempSessionDir) {
     console.log('[Start Flow] Iniciando Puppeteer...');
     const browserData = await launchBrowser(url);
     browserInstance = browserData.browser;
+    browserPage = browserData.page;
 
     if (!browserData.admitted) {
       console.log('[Start Flow] AVISO: Não foi admitido na reunião. Fechando navegador e abortando...');
@@ -282,6 +284,7 @@ async function runStartRecordingFlow(url, rawVideoPath, tempSessionDir) {
       activeMeetUrl = '';
       recordingStartTime = null;
       browserInstance = null;
+      browserPage = null;
       
       try {
         fs.rmSync(tempSessionDir, { recursive: true, force: true });
@@ -296,6 +299,63 @@ async function runStartRecordingFlow(url, rawVideoPath, tempSessionDir) {
     ffmpegProcess = await startRecording(rawVideoPath);
     console.log('[Start Flow] FFmpeg rodando e gravando ativamente.');
 
+    // Injeta o monitor de oradores (Espião) na página do Google Meet
+    const startTimeMs = recordingStartTime.getTime();
+    try {
+      await browserPage.evaluate((recordingStartTimeMs) => {
+        window.speakerTimeline = [];
+        window.activeSpeaker = null;
+        window.speakerStartTime = 0;
+        window.recordingStartTimeMs = recordingStartTimeMs;
+
+        // Loop periódico para verificar quem fala a cada 500ms
+        window.speakerMonitorInterval = setInterval(() => {
+          try {
+            // Seletores heurísticos do Meet para caixas de vídeo e participantes no grid
+            const cards = Array.from(document.querySelectorAll('[data-participant-id], [data-requested-participant-id], div[role="listitem"]'));
+            let currentVoiceActiveName = null;
+
+            for (const card of cards) {
+              // Verifica se o participante está falando analisando o indicador visual
+              // Heurística 1: Ondas sonoras em movimento (Meet exibe ondas pulsantes azuis ou verdes)
+              const hasAudioActivity = card.querySelector('svg[class*="wave"], [class*="voice"], [class*="audio-wave"], [class*="speaking"], [class*="talking"], [class*="active-microphone"], [aria-label*="falando"], [aria-label*="talking"]');
+              
+              // Heurística 2: Borda colorida ao redor do card que indica quem está falando
+              const hasContourGlow = card.querySelector('[style*="border-color"], [class*="glow"], [class*="active-border"], [class*="speaking-border"]');
+
+              if (hasAudioActivity || hasContourGlow) {
+                // Encontra o elemento de texto que armazena o nome
+                const nameEl = card.querySelector('[data-self-name], span, div');
+                if (nameEl && nameEl.innerText && nameEl.innerText.trim().length > 1) {
+                  currentVoiceActiveName = nameEl.innerText.trim();
+                  break; // Pega o primeiro orador ativo detectado no grid
+                }
+              }
+            }
+
+            const currentRelativeSeconds = (Date.now() - window.recordingStartTimeMs) / 1000;
+
+            if (currentVoiceActiveName !== window.activeSpeaker) {
+              if (window.activeSpeaker !== null) {
+                window.speakerTimeline.push({
+                  speaker: window.activeSpeaker,
+                  start: window.speakerStartTime,
+                  end: currentRelativeSeconds
+                });
+              }
+              window.activeSpeaker = currentVoiceActiveName;
+              window.speakerStartTime = currentRelativeSeconds;
+            }
+          } catch (err) {
+            console.error('[Espião Meet] Erro no monitoramento de fala:', err.message);
+          }
+        }, 500);
+      }, startTimeMs);
+      console.log('[Start Flow] Monitoramento de oradores ativado no Meet.');
+    } catch (e) {
+      console.error('[Start Flow] Erro ao ativar monitoramento de oradores:', e.message);
+    }
+
   } catch (err) {
     console.error('[Start Flow] Erro fatal no fluxo de inicialização:', err);
     
@@ -306,6 +366,7 @@ async function runStartRecordingFlow(url, rawVideoPath, tempSessionDir) {
     activeMeetUrl = '';
     recordingStartTime = null;
     ffmpegProcess = null;
+    browserPage = null;
     
     if (browserInstance) {
       try {
@@ -334,6 +395,7 @@ app.post('/api/recording/stop', async (req, res) => {
   const rawVideoPath = path.join(tempSessionDir, 'raw.mp4');
   const finalVideoPath = path.join(mediaDir, `${sessionId}.mp4`);
   const finalMarkdownPath = path.join(mediaDir, `${sessionId}.md`);
+  const timelinePath = path.join(tempSessionDir, 'timeline.json');
 
   console.log(`\n[Dashboard API] Parando gravação para sessão: ${sessionId}`);
 
@@ -343,7 +405,37 @@ app.post('/api/recording/stop', async (req, res) => {
       await stopRecording(ffmpegProcess);
     }
 
-    // 2. Fecha o navegador (Puppeteer)
+    // 2. Extrai a timeline de oradores do navegador antes de fechá-lo
+    let timeline = [];
+    if (browserPage) {
+      try {
+        timeline = await browserPage.evaluate(() => {
+          // Finaliza o último orador ativo se houver
+          if (window.activeSpeaker && window.speakerStartTime) {
+            const currentRelativeSeconds = (Date.now() - window.recordingStartTimeMs) / 1000;
+            window.speakerTimeline.push({
+              speaker: window.activeSpeaker,
+              start: window.speakerStartTime,
+              end: currentRelativeSeconds
+            });
+            window.activeSpeaker = null;
+          }
+          return window.speakerTimeline || [];
+        });
+        console.log(`[Dashboard API] Timeline de oradores recuperada. Total de registros: ${timeline.length}`);
+      } catch (e) {
+        console.error('[Dashboard API] Erro ao recuperar timeline de oradores do Puppeteer:', e.message);
+      }
+    }
+
+    // Salva a timeline na pasta temporária
+    try {
+      fs.writeFileSync(timelinePath, JSON.stringify(timeline, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('[Dashboard API] Erro ao salvar timeline.json:', e.message);
+    }
+
+    // 3. Fecha o navegador (Puppeteer)
     if (browserInstance) {
       await browserInstance.close();
     }
@@ -355,8 +447,9 @@ app.post('/api/recording/stop', async (req, res) => {
     recordingStartTime = null;
     ffmpegProcess = null;
     browserInstance = null;
+    browserPage = null;
 
-    // 3. Move o arquivo de vídeo MP4 bruto imediatamente para a pasta pública
+    // 4. Move o arquivo de vídeo MP4 bruto imediatamente para a pasta pública
     if (fs.existsSync(rawVideoPath)) {
       console.log('[Dashboard API] Movendo vídeo raw para pasta pública imediatamente...');
       fs.copyFileSync(rawVideoPath, finalVideoPath);
@@ -364,8 +457,8 @@ app.post('/api/recording/stop', async (req, res) => {
       console.log('[Dashboard API] Vídeo disponibilizado com sucesso.');
     }
 
-    // 4. Inicia pós-processamento (áudio, Whisper, Llama) em segundo plano (assíncrono)
-    runBackgroundProcessing(sessionId, finalVideoPath, tempSessionDir, finalMarkdownPath);
+    // 5. Inicia pós-processamento (áudio, Whisper, Llama) em segundo plano (assíncrono)
+    runBackgroundProcessing(sessionId, finalVideoPath, tempSessionDir, finalMarkdownPath, timelinePath);
 
     res.json({
       success: true,
@@ -382,7 +475,7 @@ app.post('/api/recording/stop', async (req, res) => {
 /**
  * Executa o processamento pesado de áudio e transcrição em background
  */
-async function runBackgroundProcessing(sessionId, videoPath, tempSessionDir, markdownPath) {
+async function runBackgroundProcessing(sessionId, videoPath, tempSessionDir, markdownPath, timelinePath) {
   activeTranscriptions.add(sessionId);
   console.log(`[Background Process] Iniciando processamento de transcrição para: ${sessionId}`);
 
@@ -392,7 +485,7 @@ async function runBackgroundProcessing(sessionId, videoPath, tempSessionDir, mar
 
     if (chunks.length > 0) {
       // 2. Transcrição (Whisper) e Ata (Llama) via Groq
-      const markdownContent = await transcribeAndSummarize(chunks);
+      const markdownContent = await transcribeAndSummarize(chunks, timelinePath);
       fs.writeFileSync(markdownPath, markdownContent, 'utf-8');
       console.log(`[Background Process] Ata Markdown finalizada e salva em: ${markdownPath}`);
     } else {
