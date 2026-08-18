@@ -85,7 +85,10 @@
       <!-- Configurações de API -->
       <div class="settings-panel" style="padding: 16px 24px; border-top: 1px solid var(--glass-border); background: rgba(0, 0, 0, 0.15); margin-top: auto; display: flex; flex-direction: column; gap: 12px;">
         <div class="settings-header" id="btnToggleSettings" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
-          <span><i class="fa-solid fa-gear"></i> Configurações da API</span>
+          <span style="display: flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-gear"></i> Configurações da API
+            <span id="settingsStatusBadge" style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #34d399;">Ativo</span>
+          </span>
           <i class="fa-solid fa-chevron-up toggle-icon" id="settingsToggleIcon" style="transition: transform 0.3s; transform: rotate(180deg);"></i>
         </div>
         <div class="settings-body" id="settingsBody" style="display: none; flex-direction: column; gap: 12px;">

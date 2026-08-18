@@ -427,13 +427,27 @@ async function fetchGroqKeySettings() {
     const response = await fetch('/api/settings');
     const data = await response.json();
     
+    const settingsStatusBadge = document.getElementById('settingsStatusBadge');
+
     // Status da Chave Groq
     if (data.hasGroqKey) {
       groqKeyStatus.textContent = `Configurada: ${data.maskedKey}`;
       groqKeyStatus.style.color = '#34d399'; // Verde claro
+      groqKeyInput.placeholder = `Chave ativa: ${data.maskedKey}`;
+      if (settingsStatusBadge) {
+        settingsStatusBadge.textContent = '🟢 Pronto';
+        settingsStatusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+        settingsStatusBadge.style.color = '#34d399';
+      }
     } else {
       groqKeyStatus.textContent = 'Chave API não configurada.';
       groqKeyStatus.style.color = '#fca5a5'; // Vermelho claro
+      groqKeyInput.placeholder = 'gsk_...';
+      if (settingsStatusBadge) {
+        settingsStatusBadge.textContent = '🟡 Pendente';
+        settingsStatusBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+        settingsStatusBadge.style.color = '#fde047';
+      }
     }
     
     // Nome do Bot
@@ -531,9 +545,16 @@ async function fetchGDriveSettings() {
     }
     
     if (data.isConfigured) {
+      const emailInfo = data.serviceAccountEmail ? ` (${data.serviceAccountEmail})` : '';
       gdriveStatusText.innerHTML = `<span style="color: #34d399;"><i class="fa-solid fa-circle-check"></i> Conectado: ${data.serviceAccountEmail || 'Credenciais ativas'}</span>`;
+      if (gdriveJsonInput) {
+        gdriveJsonInput.placeholder = `Credencial JSON já configurada${emailInfo}.\n(Cole novo JSON apenas se quiser substituir)`;
+      }
     } else {
       gdriveStatusText.innerHTML = `<span style="color: #fca5a5;"><i class="fa-solid fa-circle-exclamation"></i> Não configurado</span>`;
+      if (gdriveJsonInput) {
+        gdriveJsonInput.placeholder = '{"type": "service_account", "project_id": ...}';
+      }
     }
   } catch (err) {
     console.error('Erro ao buscar status do Google Drive:', err);

@@ -42,15 +42,27 @@ export function getDriveConfig(customConfig = {}) {
     }
   }
 
-  // Se nenhum arquivo específico foi configurado, mas existe gdrive-credentials.json na raiz ou em media/, usa como padrão
+  // Se nenhum arquivo específico foi configurado, busca automaticamente por arquivos de credenciais
   if (!keyFile && !serviceAccountJson) {
-    const defaultCredentialsRoot = path.join(process.cwd(), 'gdrive-credentials.json');
-    const defaultCredentialsMedia = path.join(process.cwd(), 'dashboard', 'public', 'media', 'gdrive-credentials.json');
-    
-    if (fs.existsSync(defaultCredentialsRoot)) {
-      keyFile = defaultCredentialsRoot;
-    } else if (fs.existsSync(defaultCredentialsMedia)) {
-      keyFile = defaultCredentialsMedia;
+    const candidateFiles = [
+      path.join(process.cwd(), 'gdrive-credentials.json'),
+      path.join(process.cwd(), 'gdrive-credentials.json.json'),
+      path.join(process.cwd(), 'credentials.json'),
+      path.join(process.cwd(), 'dashboard', 'public', 'media', 'gdrive-credentials.json'),
+      path.join(process.cwd(), 'dashboard', 'public', 'media', 'gdrive-credentials.json.json'),
+      path.join(process.cwd(), 'dashboard', 'public', 'media', 'credentials.json')
+    ];
+
+    for (const candidate of candidateFiles) {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        try {
+          const content = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
+          if (content.type === 'service_account' || content.client_email) {
+            keyFile = candidate;
+            break;
+          }
+        } catch (e) {}
+      }
     }
   }
 
