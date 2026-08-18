@@ -6,6 +6,13 @@ import { launchBrowser } from '../src/browser.js';
 import { startRecording, stopRecording } from '../src/recorder.js';
 import { processAudioPipeline } from '../src/audio.js';
 import { transcribeAndSummarize } from '../src/groq.js';
+import { 
+  syncMeetingToDrive, 
+  getMeetingDriveMetadata, 
+  saveMeetingDriveMetadata, 
+  testDriveConnection, 
+  getDriveConfig 
+} from '../src/gdrive.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -43,6 +50,18 @@ function loadPersistentSettings() {
       }
       if (configData.BOT_NAME) {
         process.env.BOT_NAME = configData.BOT_NAME;
+      }
+      if (configData.GDRIVE_ENABLED !== undefined) {
+        process.env.GDRIVE_ENABLED = String(configData.GDRIVE_ENABLED);
+      }
+      if (configData.GDRIVE_KEY_FILE) {
+        process.env.GDRIVE_KEY_FILE = configData.GDRIVE_KEY_FILE;
+      }
+      if (configData.GDRIVE_SERVICE_ACCOUNT_JSON) {
+        process.env.GDRIVE_SERVICE_ACCOUNT_JSON = configData.GDRIVE_SERVICE_ACCOUNT_JSON;
+      }
+      if (configData.GDRIVE_PARENT_FOLDER_ID) {
+        process.env.GDRIVE_PARENT_FOLDER_ID = configData.GDRIVE_PARENT_FOLDER_ID;
       }
       console.log('[Settings] Configurações carregadas com sucesso do config.json no volume persistente.');
     } catch (e) {
@@ -171,8 +190,9 @@ let ffmpegProcess = null;
 let browserInstance = null;
 let browserPage = null;
 
-// Rastreamento de transcrições em andamento em segundo plano
+// Rastreamento de transcrições e uploads em andamento em segundo plano
 const activeTranscriptions = new Set();
+const activeDriveUploads = new Set();
 
 /**
  * Auxiliar para formatar data
@@ -221,7 +241,8 @@ app.get('/api/recording/status', (req, res) => {
     activeSessionId,
     meetUrl: activeMeetUrl,
     startTime: recordingStartTime,
-    transcribing: Array.from(activeTranscriptions)
+    transcribing: Array.from(activeTranscriptions),
+    driveSyncing: Array.from(activeDriveUploads)
   });
 });
 
@@ -515,6 +536,32 @@ async function runBackgroundProcessing(sessionId, videoPath, tempSessionDir, mar
     } catch (e) {
       console.error('[Background Process] Falha ao limpar pasta temporária:', e.message);
     }
+
+    // 3. Sincronização automática em segundo plano com o Google Drive (se habilitado)
+    const driveConfig = getDriveConfig();
+    if (driveConfig.enabled) {
+      activeDriveUploads.add(sessionId);
+      console.log(`[Background Process] Disparando upload da reunião ${sessionId} para o Google Drive...`);
+      
+      const meetingTitle = extractTitleFromMarkdown(
+        markdownPath, 
+        sessionId.replace('reuniao_', 'Reunião ')
+      );
+
+      syncMeetingToDrive({
+        sessionId,
+        title: meetingTitle,
+        mediaDir,
+        mp4Path: videoPath,
+        mdPath: markdownPath
+      }).then(res => {
+        console.log(`[Background Process] Sincronização Google Drive para ${sessionId}: ${res.synced ? 'Sucesso' : 'Falha'}`);
+      }).catch(driveErr => {
+        console.error(`[Background Process] Erro no upload para o Google Drive:`, driveErr.message);
+      }).finally(() => {
+        activeDriveUploads.delete(sessionId);
+      });
+    }
   }
 }
 
@@ -546,6 +593,13 @@ app.get('/api/meetings', (req, res) => {
           hasVideo: false,
           hasMarkdown: false,
           transcribing: activeTranscriptions.has(baseName),
+          driveSyncing: activeDriveUploads.has(baseName),
+          driveStatus: 'none',
+          driveFolderUrl: null,
+          driveVideoUrl: null,
+          driveMarkdownUrl: null,
+          driveError: null,
+          driveSyncedAt: null,
           timestamp: 0
         });
       }
@@ -570,6 +624,22 @@ app.get('/api/meetings', (req, res) => {
           path.join(mediaDir, file), 
           meeting.title
         );
+      }
+
+      // Lê metadados persistentes do Google Drive para a sessão
+      const driveMeta = getMeetingDriveMetadata(mediaDir, baseName);
+      if (driveMeta) {
+        meeting.driveFolderUrl = driveMeta.folderUrl || null;
+        meeting.driveVideoUrl = driveMeta.videoUrl || null;
+        meeting.driveMarkdownUrl = driveMeta.markdownUrl || null;
+        meeting.driveError = driveMeta.error || null;
+        meeting.driveSyncedAt = driveMeta.syncedAt || null;
+        meeting.driveStatus = driveMeta.status || 'none';
+      }
+
+      if (activeDriveUploads.has(baseName)) {
+        meeting.driveStatus = 'syncing';
+        meeting.driveSyncing = true;
       }
     });
 
@@ -611,6 +681,7 @@ app.delete('/api/meetings/:id', (req, res) => {
   const { id } = req.params;
   const mp4Path = path.join(mediaDir, `${id}.mp4`);
   const mdPath = path.join(mediaDir, `${id}.md`);
+  const driveMetaPath = path.join(mediaDir, `${id}.drive.json`);
   let deletedAny = false;
 
   try {
@@ -620,6 +691,10 @@ app.delete('/api/meetings/:id', (req, res) => {
     }
     if (fs.existsSync(mdPath)) {
       fs.unlinkSync(mdPath);
+      deletedAny = true;
+    }
+    if (fs.existsSync(driveMetaPath)) {
+      fs.unlinkSync(driveMetaPath);
       deletedAny = true;
     }
 
@@ -741,6 +816,136 @@ app.post('/api/settings/bot-name', (req, res) => {
     console.error('[Dashboard API] Erro ao salvar nome do bot:', err);
     res.status(500).json({ error: 'Erro ao salvar o nome do bot no volume de mídias.' });
   }
+});
+
+/**
+ * API: Obter configurações do Google Drive
+ */
+app.get('/api/settings/gdrive', (req, res) => {
+  const config = getDriveConfig();
+  let maskedJson = '';
+  let serviceAccountEmail = '';
+
+  if (config.serviceAccountJson) {
+    try {
+      const parsed = typeof config.serviceAccountJson === 'string' 
+        ? JSON.parse(config.serviceAccountJson) 
+        : config.serviceAccountJson;
+      serviceAccountEmail = parsed.client_email || '';
+      maskedJson = parsed.client_email ? `Configurado (${parsed.client_email})` : 'JSON Configurado';
+    } catch (e) {
+      maskedJson = 'JSON Inválido';
+    }
+  } else if (config.keyFile && fs.existsSync(config.keyFile)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(config.keyFile, 'utf-8'));
+      serviceAccountEmail = parsed.client_email || '';
+    } catch (e) {}
+  }
+
+  const isConfigured = Boolean(
+    config.serviceAccountJson || 
+    (config.keyFile && fs.existsSync(config.keyFile)) || 
+    (config.clientId && config.refreshToken)
+  );
+
+  res.json({
+    enabled: config.enabled,
+    isConfigured,
+    keyFile: config.keyFile || '',
+    hasServiceAccountJson: Boolean(config.serviceAccountJson),
+    serviceAccountEmail,
+    parentFolderId: config.parentFolderId || '',
+    maskedJson
+  });
+});
+
+/**
+ * API: Salvar configurações do Google Drive
+ */
+app.post('/api/settings/gdrive', (req, res) => {
+  const { enabled, keyFile, serviceAccountJson, parentFolderId } = req.body;
+
+  try {
+    if (enabled !== undefined) {
+      saveSettings('GDRIVE_ENABLED', String(enabled));
+    }
+    if (keyFile !== undefined) {
+      saveSettings('GDRIVE_KEY_FILE', keyFile.trim());
+    }
+    if (serviceAccountJson !== undefined && serviceAccountJson.trim() !== '') {
+      // Valida se é JSON válido
+      try {
+        JSON.parse(serviceAccountJson.trim());
+        saveSettings('GDRIVE_SERVICE_ACCOUNT_JSON', serviceAccountJson.trim());
+      } catch (jsonErr) {
+        return res.status(400).json({ error: `JSON de credenciais inválido: ${jsonErr.message}` });
+      }
+    }
+    if (parentFolderId !== undefined) {
+      saveSettings('GDRIVE_PARENT_FOLDER_ID', parentFolderId.trim());
+    }
+
+    console.log('[Dashboard API] Configurações do Google Drive salvas com sucesso.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Dashboard API] Erro ao salvar configurações do Google Drive:', err);
+    res.status(500).json({ error: 'Erro ao salvar configurações do Google Drive.' });
+  }
+});
+
+/**
+ * API: Testar conexão com o Google Drive
+ */
+app.post('/api/settings/gdrive/test', async (req, res) => {
+  try {
+    const testResult = await testDriveConnection(req.body);
+    res.json(testResult);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * API: Sincronizar reunião manualmente com o Google Drive
+ */
+app.post('/api/meetings/:id/sync-drive', async (req, res) => {
+  const { id } = req.params;
+  const mp4Path = path.join(mediaDir, `${id}.mp4`);
+  const mdPath = path.join(mediaDir, `${id}.md`);
+
+  if (!fs.existsSync(mp4Path) && !fs.existsSync(mdPath)) {
+    return res.status(404).json({ error: 'Arquivos da reunião não encontrados.' });
+  }
+
+  if (activeDriveUploads.has(id)) {
+    return res.status(400).json({ error: 'Esta reunião já está sendo sincronizada no momento.' });
+  }
+
+  const title = extractTitleFromMarkdown(mdPath, id.replace('reuniao_', 'Reunião '));
+
+  activeDriveUploads.add(id);
+
+  // Dispara sincronização em segundo plano
+  syncMeetingToDrive({
+    sessionId: id,
+    title,
+    mediaDir,
+    mp4Path: fs.existsSync(mp4Path) ? mp4Path : null,
+    mdPath: fs.existsSync(mdPath) ? mdPath : null,
+    customConfig: { force: true }
+  }).then(result => {
+    console.log(`[Dashboard API] Sincronização manual concluída para ${id}:`, result.synced);
+  }).catch(err => {
+    console.error(`[Dashboard API] Erro na sincronização manual para ${id}:`, err);
+  }).finally(() => {
+    activeDriveUploads.delete(id);
+  });
+
+  res.json({
+    success: true,
+    message: 'Sincronização com o Google Drive iniciada em segundo plano.'
+  });
 });
 
 // Inicialização do servidor

@@ -8,6 +8,7 @@ services:
     volumes:
       - ./dashboard/public/media:/app/dashboard/public/media
       - ./.env:/app/.env
+      - ./gdrive-credentials.json:/app/gdrive-credentials.json:ro
     shm_size: '2gb' # Previne que o Chromium quebre por falta de memória compartilhada
     stdin_open: true
     tty: true

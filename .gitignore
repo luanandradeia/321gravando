@@ -11,6 +11,9 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+gdrive-credentials.json
+*credentials*.json
+*.key.json
 
 # Arquivos Temporários de Processamento
 temp/

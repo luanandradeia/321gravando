@@ -2,6 +2,7 @@ import { launchBrowser } from './src/browser.js';
 import { startRecording, stopRecording } from './src/recorder.js';
 import { processAudioPipeline } from './src/audio.js';
 import { transcribeAndSummarize } from './src/groq.js';
+import { syncMeetingToDrive } from './src/gdrive.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -122,6 +123,23 @@ async function handleShutdown(reason) {
       fs.copyFileSync(rawVideoPath, finalVideoPath);
       fs.unlinkSync(rawVideoPath);
       console.log(`[Notetaker] Vídeo final salvo em: ${finalVideoPath}`);
+    }
+
+    // 6. Sincroniza a gravação e a ata com o Google Drive (se configurado)
+    try {
+      console.log('[Notetaker] Verificando integração com o Google Drive...');
+      const gdriveResult = await syncMeetingToDrive({
+        sessionId,
+        title: sessionId.replace('reuniao_', 'Reunião '),
+        mediaDir,
+        mp4Path: finalVideoPath,
+        mdPath: finalMarkdownPath
+      });
+      if (gdriveResult.synced) {
+        console.log(`[Notetaker] Gravação salva no Google Drive: ${gdriveResult.folderUrl}`);
+      }
+    } catch (driveErr) {
+      console.warn(`[Notetaker] Google Drive não sincronizado: ${driveErr.message}`);
     }
 
     console.log('\n==================================================');

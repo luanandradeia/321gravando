@@ -105,6 +105,35 @@
               <button id="btnSaveBotName" class="btn btn-primary" style="padding: 8px 12px; font-size: 0.85rem;">Salvar</button>
             </div>
           </div>
+
+          <!-- Seção Google Drive -->
+          <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="gdriveEnabledInput" style="font-size: 0.75rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <i class="fa-brands fa-google-drive"></i> Sincronizar Google Drive
+              </label>
+              <input type="checkbox" id="gdriveEnabledInput" style="cursor: pointer; accent-color: #3b82f6; width: 16px; height: 16px;">
+            </div>
+
+            <div id="gdriveFieldsContainer" style="display: flex; flex-direction: column; gap: 8px;">
+              <div>
+                <label for="gdriveJsonInput" style="font-size: 0.7rem; color: var(--text-muted);">Service Account JSON (ou colar credenciais):</label>
+                <textarea id="gdriveJsonInput" rows="2" placeholder='{"type": "service_account", "project_id": ...}' style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: monospace; font-size: 0.75rem; outline: none; resize: vertical;"></textarea>
+              </div>
+
+              <div>
+                <label for="gdriveParentFolderInput" style="font-size: 0.7rem; color: var(--text-muted);">ID da Pasta Raiz (Opcional):</label>
+                <input type="text" id="gdriveParentFolderInput" placeholder="Ex: 1A2b3C4d5E... (Deixe vazio para auto-criar '321gravando')" style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: inherit; font-size: 0.75rem; outline: none;">
+              </div>
+
+              <div style="display: flex; gap: 6px;">
+                <button id="btnTestGDrive" class="btn" style="flex: 1; padding: 6px 10px; font-size: 0.75rem; background: rgba(255,255,255,0.05);"><i class="fa-solid fa-plug"></i> Testar</button>
+                <button id="btnSaveGDrive" class="btn btn-primary" style="flex: 1; padding: 6px 10px; font-size: 0.75rem;">Salvar Drive</button>
+              </div>
+
+              <small id="gdriveStatusText" style="font-size: 0.7rem; color: var(--text-muted); line-height: 1.3;">Carregando status do Drive...</small>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
@@ -144,18 +173,27 @@
                   </button>
                 </div>
               </div>
-              <div class="metadata">
+              <div class="metadata" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
                 <span><i class="fa-regular fa-calendar-days"></i> <span id="sessionDate">Carregando...</span></span>
+                <span id="sessionDriveBadge" style="display: none; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #93c5fd;">
+                  <i class="fa-brands fa-google-drive"></i> <span id="sessionDriveStatusText">Drive</span>
+                </span>
               </div>
             </div>
             
-            <div class="action-bar">
+            <div class="action-bar" style="display: flex; flex-wrap: wrap; gap: 8px;">
               <a href="#" class="btn btn-primary" id="btnDownloadVideo" download>
                 <i class="fa-solid fa-video"></i> Baixar Vídeo (.mp4)
               </a>
               <a href="#" class="btn" id="btnDownloadMarkdown" download>
                 <i class="fa-solid fa-file-arrow-down"></i> Baixar Ata (.md)
               </a>
+              <a href="#" target="_blank" class="btn btn-drive" id="btnOpenDrive" style="display: none;" title="Abrir pasta desta reunião no Google Drive">
+                <i class="fa-brands fa-google-drive"></i> Abrir no Drive ↗
+              </a>
+              <button class="btn" id="btnSyncDrive" style="padding: 8px 12px; font-size: 0.85rem;" title="Sincronizar esta gravação com o Google Drive">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Sincronizar Drive
+              </button>
             </div>
           </div>
           

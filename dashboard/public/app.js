@@ -47,6 +47,20 @@ const groqKeyStatus = document.getElementById('groqKeyStatus');
 const botNameInput = document.getElementById('botNameInput');
 const btnSaveBotName = document.getElementById('btnSaveBotName');
 
+// Elementos da UI - Google Drive
+const gdriveEnabledInput = document.getElementById('gdriveEnabledInput');
+const gdriveJsonInput = document.getElementById('gdriveJsonInput');
+const gdriveParentFolderInput = document.getElementById('gdriveParentFolderInput');
+const btnTestGDrive = document.getElementById('btnTestGDrive');
+const btnSaveGDrive = document.getElementById('btnSaveGDrive');
+const gdriveStatusText = document.getElementById('gdriveStatusText');
+const gdriveFieldsContainer = document.getElementById('gdriveFieldsContainer');
+
+const sessionDriveBadge = document.getElementById('sessionDriveBadge');
+const sessionDriveStatusText = document.getElementById('sessionDriveStatusText');
+const btnOpenDrive = document.getElementById('btnOpenDrive');
+const btnSyncDrive = document.getElementById('btnSyncDrive');
+
 /**
  * Inicialização
  */
@@ -76,6 +90,17 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveGroqKey.addEventListener('click', saveGroqApiKey);
   btnSaveBotName.addEventListener('click', saveBotName);
   fetchGroqKeySettings();
+
+  // Google Drive Configurações & Ações
+  btnSaveGDrive.addEventListener('click', saveGDriveSettings);
+  btnTestGDrive.addEventListener('click', testGDriveConnection);
+  btnSyncDrive.addEventListener('click', syncActiveMeetingToDrive);
+  if (gdriveEnabledInput) {
+    gdriveEnabledInput.addEventListener('change', () => {
+      gdriveFieldsContainer.style.opacity = gdriveEnabledInput.checked ? '1' : '0.6';
+    });
+  }
+  fetchGDriveSettings();
 
   // Botão de Logout no Header
   const btnLogout = document.getElementById('btnLogout');
@@ -325,6 +350,14 @@ function renderMeetingsList(meetingsToRender) {
       badges += `<span class="badge badge-md"><i class="fa-solid fa-file-invoice"></i> Ata</span>`;
     }
 
+    if (meeting.driveStatus === 'syncing') {
+      badges += `<span class="badge badge-drive-syncing"><i class="fa-brands fa-google-drive fa-spin"></i> Drive Sync</span>`;
+    } else if (meeting.driveStatus === 'synced') {
+      badges += `<span class="badge badge-drive" title="Salvo no Google Drive"><i class="fa-brands fa-google-drive"></i> Drive</span>`;
+    } else if (meeting.driveStatus === 'error') {
+      badges += `<span class="badge badge-drive-error" title="${meeting.driveError || 'Erro no Drive'}"><i class="fa-solid fa-triangle-exclamation"></i> Drive</span>`;
+    }
+
     card.innerHTML = `
       <h3>${meeting.title}</h3>
       <div class="date">
@@ -483,6 +516,143 @@ async function saveBotName() {
 }
 
 /**
+ * Busca configurações do Google Drive
+ */
+async function fetchGDriveSettings() {
+  try {
+    const res = await fetch('/api/settings/gdrive');
+    const data = await res.json();
+    
+    if (gdriveEnabledInput) {
+      gdriveEnabledInput.checked = Boolean(data.enabled);
+    }
+    if (data.parentFolderId && gdriveParentFolderInput) {
+      gdriveParentFolderInput.value = data.parentFolderId;
+    }
+    
+    if (data.isConfigured) {
+      gdriveStatusText.innerHTML = `<span style="color: #34d399;"><i class="fa-solid fa-circle-check"></i> Conectado: ${data.serviceAccountEmail || 'Credenciais ativas'}</span>`;
+    } else {
+      gdriveStatusText.innerHTML = `<span style="color: #fca5a5;"><i class="fa-solid fa-circle-exclamation"></i> Não configurado</span>`;
+    }
+  } catch (err) {
+    console.error('Erro ao buscar status do Google Drive:', err);
+    if (gdriveStatusText) {
+      gdriveStatusText.textContent = 'Erro ao consultar status do Drive.';
+    }
+  }
+}
+
+/**
+ * Salva as configurações do Google Drive
+ */
+async function saveGDriveSettings() {
+  if (!btnSaveGDrive) return;
+  btnSaveGDrive.disabled = true;
+  gdriveStatusText.textContent = 'Salvando configurações...';
+
+  try {
+    const payload = {
+      enabled: gdriveEnabledInput.checked,
+      parentFolderId: gdriveParentFolderInput.value.trim()
+    };
+    
+    const jsonVal = gdriveJsonInput.value.trim();
+    if (jsonVal) {
+      payload.serviceAccountJson = jsonVal;
+    }
+
+    const res = await fetch('/api/settings/gdrive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      alert(data.error);
+    } else {
+      alert('Configurações do Google Drive salvas com sucesso!');
+      gdriveJsonInput.value = '';
+      fetchGDriveSettings();
+    }
+  } catch (err) {
+    alert('Erro ao salvar configurações do Drive: ' + err.message);
+  } finally {
+    btnSaveGDrive.disabled = false;
+  }
+}
+
+/**
+ * Testa a conexão com o Google Drive
+ */
+async function testGDriveConnection() {
+  if (!btnTestGDrive) return;
+  btnTestGDrive.disabled = true;
+  gdriveStatusText.innerHTML = '<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Testando conexão...</span>';
+
+  try {
+    const payload = {
+      GDRIVE_ENABLED: gdriveEnabledInput.checked,
+      GDRIVE_PARENT_FOLDER_ID: gdriveParentFolderInput.value.trim()
+    };
+    if (gdriveJsonInput.value.trim()) {
+      payload.GDRIVE_SERVICE_ACCOUNT_JSON = gdriveJsonInput.value.trim();
+    }
+
+    const res = await fetch('/api/settings/gdrive/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      gdriveStatusText.innerHTML = `<span style="color: #34d399;"><i class="fa-solid fa-circle-check"></i> ${data.message} Conta: ${data.email || ''}</span>`;
+      alert(`Sucesso! Conexão verificada.\nPasta "321gravando" pronta no Google Drive.`);
+      fetchGDriveSettings();
+    } else {
+      gdriveStatusText.innerHTML = `<span style="color: #fca5a5;"><i class="fa-solid fa-triangle-exclamation"></i> ${data.message}</span>`;
+      alert(`Falha no teste: ${data.message}`);
+    }
+  } catch (err) {
+    gdriveStatusText.innerHTML = `<span style="color: #fca5a5;">Erro no teste: ${err.message}</span>`;
+  } finally {
+    btnTestGDrive.disabled = false;
+  }
+}
+
+/**
+ * Dispara sincronização manual da reunião ativa com o Google Drive
+ */
+async function syncActiveMeetingToDrive() {
+  if (!activeMeetingId) return;
+
+  btnSyncDrive.disabled = true;
+  btnSyncDrive.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
+
+  try {
+    const res = await fetch(`/api/meetings/${activeMeetingId}/sync-drive`, {
+      method: 'POST'
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      alert(data.error);
+    } else {
+      alert('Sincronização com o Google Drive iniciada em segundo plano!');
+      await syncRecordingStatus();
+      selectMeeting(activeMeetingId);
+    }
+  } catch (err) {
+    alert('Erro ao disparar sincronização: ' + err.message);
+  } finally {
+    btnSyncDrive.disabled = false;
+    btnSyncDrive.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Sincronizar Drive';
+  }
+}
+
+/**
  * Edita o título da reunião ativa
  */
 async function editActiveMeetingTitle() {
@@ -582,6 +752,37 @@ async function selectMeeting(id) {
   // Configura Info Cabeçalho
   sessionTitle.textContent = meeting.title;
   sessionDate.textContent = meeting.date;
+
+  // Configura Google Drive Status e Link
+  if (meeting.driveFolderUrl) {
+    btnOpenDrive.href = meeting.driveFolderUrl;
+    btnOpenDrive.style.display = 'inline-flex';
+  } else {
+    btnOpenDrive.href = '#';
+    btnOpenDrive.style.display = 'none';
+  }
+
+  if (meeting.driveStatus === 'synced') {
+    sessionDriveBadge.style.display = 'inline-flex';
+    sessionDriveBadge.style.background = 'rgba(59, 130, 246, 0.15)';
+    sessionDriveBadge.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+    sessionDriveBadge.style.color = '#93c5fd';
+    sessionDriveStatusText.textContent = 'Salvo no Google Drive ☁️';
+  } else if (meeting.driveStatus === 'syncing') {
+    sessionDriveBadge.style.display = 'inline-flex';
+    sessionDriveBadge.style.background = 'rgba(59, 130, 246, 0.2)';
+    sessionDriveBadge.style.borderColor = 'rgba(59, 130, 246, 0.6)';
+    sessionDriveBadge.style.color = '#60a5fa';
+    sessionDriveStatusText.textContent = 'Sincronizando no Drive...';
+  } else if (meeting.driveStatus === 'error') {
+    sessionDriveBadge.style.display = 'inline-flex';
+    sessionDriveBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+    sessionDriveBadge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+    sessionDriveBadge.style.color = '#fca5a5';
+    sessionDriveStatusText.textContent = 'Falha no envio para o Drive';
+  } else {
+    sessionDriveBadge.style.display = 'none';
+  }
 
   // Configura Player de Vídeo (se houver)
   if (meeting.hasVideo) {
