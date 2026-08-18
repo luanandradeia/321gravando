@@ -82,61 +82,41 @@
         </div>
       </div>
       
-      <!-- Configurações de API -->
+      <!-- Status do Sistema & Configurações (.env) -->
       <div class="settings-panel" style="padding: 16px 24px; border-top: 1px solid var(--glass-border); background: rgba(0, 0, 0, 0.15); margin-top: auto; display: flex; flex-direction: column; gap: 12px;">
         <div class="settings-header" id="btnToggleSettings" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
           <span style="display: flex; align-items: center; gap: 6px;">
-            <i class="fa-solid fa-gear"></i> Configurações da API
+            <i class="fa-solid fa-sliders"></i> Status do Sistema (.env)
             <span id="settingsStatusBadge" style="font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #34d399;">Ativo</span>
           </span>
           <i class="fa-solid fa-chevron-up toggle-icon" id="settingsToggleIcon" style="transition: transform 0.3s; transform: rotate(180deg);"></i>
         </div>
-        <div class="settings-body" id="settingsBody" style="display: none; flex-direction: column; gap: 12px;">
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            <label for="groqKeyInput" style="font-size: 0.75rem; color: var(--text-muted);">Groq API Key:</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="password" id="groqKeyInput" placeholder="gsk_..." style="flex: 1; padding: 8px 12px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: inherit; font-size: 0.85rem; outline: none; transition: var(--transition);">
-              <button id="btnSaveGroqKey" class="btn btn-primary" style="padding: 8px 12px; font-size: 0.85rem;">Salvar</button>
-            </div>
-            <small id="groqKeyStatus" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Carregando...</small>
-          </div>
+        <div class="settings-body" id="settingsBody" style="display: none; flex-direction: column; gap: 8px; font-size: 0.8rem;">
           
-          <div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
-            <label for="botNameInput" style="font-size: 0.75rem; color: var(--text-muted);">Nome do Bot no Meet:</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" id="botNameInput" placeholder="Notetaker Assistant" style="flex: 1; padding: 8px 12px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: inherit; font-size: 0.85rem; outline: none; transition: var(--transition);">
-              <button id="btnSaveBotName" class="btn btn-primary" style="padding: 8px 12px; font-size: 0.85rem;">Salvar</button>
-            </div>
+          <!-- Item Groq -->
+          <div style="background: rgba(2, 6, 17, 0.5); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 2px;">
+            <span style="color: var(--text-muted); font-size: 0.7rem;">IA & Transcrição (Groq):</span>
+            <span id="groqStatusLabel" style="font-weight: 500; color: #34d399;"><i class="fa-solid fa-circle-check"></i> Carregando...</span>
           </div>
 
-          <!-- Seção Google Drive -->
-          <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="gdriveEnabledInput" style="font-size: 0.75rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                <i class="fa-brands fa-google-drive"></i> Sincronizar Google Drive
-              </label>
-              <input type="checkbox" id="gdriveEnabledInput" style="cursor: pointer; accent-color: #3b82f6; width: 16px; height: 16px;">
-            </div>
-
-            <div id="gdriveFieldsContainer" style="display: flex; flex-direction: column; gap: 8px;">
-              <div>
-                <label for="gdriveJsonInput" style="font-size: 0.7rem; color: var(--text-muted);">Service Account JSON (ou colar credenciais):</label>
-                <textarea id="gdriveJsonInput" rows="2" placeholder='{"type": "service_account", "project_id": ...}' style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: monospace; font-size: 0.75rem; outline: none; resize: vertical;"></textarea>
-              </div>
-
-              <div>
-                <label for="gdriveParentFolderInput" style="font-size: 0.7rem; color: var(--text-muted);">ID da Pasta Raiz (Opcional):</label>
-                <input type="text" id="gdriveParentFolderInput" placeholder="Ex: 1A2b3C4d5E... (Deixe vazio para auto-criar '321gravando')" style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(2, 6, 17, 0.6); border: 1px solid var(--glass-border); border-radius: var(--radius-md); color: var(--text-main); font-family: inherit; font-size: 0.75rem; outline: none;">
-              </div>
-
-              <div style="display: flex; gap: 6px;">
-                <button id="btnTestGDrive" class="btn" style="flex: 1; padding: 6px 10px; font-size: 0.75rem; background: rgba(255,255,255,0.05);"><i class="fa-solid fa-plug"></i> Testar</button>
-                <button id="btnSaveGDrive" class="btn btn-primary" style="flex: 1; padding: 6px 10px; font-size: 0.75rem;">Salvar Drive</button>
-              </div>
-
-              <small id="gdriveStatusText" style="font-size: 0.7rem; color: var(--text-muted); line-height: 1.3;">Carregando status do Drive...</small>
-            </div>
+          <!-- Item Bot Name -->
+          <div style="background: rgba(2, 6, 17, 0.5); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 2px;">
+            <span style="color: var(--text-muted); font-size: 0.7rem;">Nome do Bot no Meet:</span>
+            <span id="botNameLabel" style="font-weight: 500; color: var(--text-main);">Carregando...</span>
           </div>
+
+          <!-- Item Google Drive -->
+          <div style="background: rgba(2, 6, 17, 0.5); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 4px;">
+            <span style="color: var(--text-muted); font-size: 0.7rem;">Google Drive (Nuvem):</span>
+            <span id="gdriveStatusLabel" style="font-weight: 500; color: #93c5fd;"><i class="fa-brands fa-google-drive"></i> Carregando...</span>
+            <button id="btnTestGDrive" class="btn" style="margin-top: 4px; padding: 4px 8px; font-size: 0.75rem; background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #93c5fd;">
+              <i class="fa-solid fa-plug"></i> Testar Conexão Drive
+            </button>
+          </div>
+
+          <small style="color: var(--text-muted); font-size: 0.7rem; text-align: center; margin-top: 4px;">
+            <i class="fa-solid fa-circle-info"></i> Configurado diretamente no arquivo <code>.env</code>
+          </small>
         </div>
       </div>
     </aside>

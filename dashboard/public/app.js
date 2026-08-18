@@ -37,24 +37,15 @@ const markdownRender = document.getElementById('markdownRender');
 const btnEditTitle = document.getElementById('btnEditTitle');
 const btnDeleteMeeting = document.getElementById('btnDeleteMeeting');
 
-// Elementos da UI - Configurações da API e do Bot
+// Elementos da UI - Status do Sistema (.env)
 const btnToggleSettings = document.getElementById('btnToggleSettings');
 const settingsBody = document.getElementById('settingsBody');
 const settingsToggleIcon = document.getElementById('settingsToggleIcon');
-const groqKeyInput = document.getElementById('groqKeyInput');
-const btnSaveGroqKey = document.getElementById('btnSaveGroqKey');
-const groqKeyStatus = document.getElementById('groqKeyStatus');
-const botNameInput = document.getElementById('botNameInput');
-const btnSaveBotName = document.getElementById('btnSaveBotName');
-
-// Elementos da UI - Google Drive
-const gdriveEnabledInput = document.getElementById('gdriveEnabledInput');
-const gdriveJsonInput = document.getElementById('gdriveJsonInput');
-const gdriveParentFolderInput = document.getElementById('gdriveParentFolderInput');
+const settingsStatusBadge = document.getElementById('settingsStatusBadge');
+const groqStatusLabel = document.getElementById('groqStatusLabel');
+const botNameLabel = document.getElementById('botNameLabel');
+const gdriveStatusLabel = document.getElementById('gdriveStatusLabel');
 const btnTestGDrive = document.getElementById('btnTestGDrive');
-const btnSaveGDrive = document.getElementById('btnSaveGDrive');
-const gdriveStatusText = document.getElementById('gdriveStatusText');
-const gdriveFieldsContainer = document.getElementById('gdriveFieldsContainer');
 
 const sessionDriveBadge = document.getElementById('sessionDriveBadge');
 const sessionDriveStatusText = document.getElementById('sessionDriveStatusText');
@@ -67,6 +58,7 @@ const btnSyncDrive = document.getElementById('btnSyncDrive');
 document.addEventListener('DOMContentLoaded', () => {
   fetchMeetings();
   syncRecordingStatus();
+  fetchSystemSettings();
   
   // Polling periódico do estado (a cada 2.5 segundos)
   setInterval(() => {
@@ -85,22 +77,10 @@ document.addEventListener('DOMContentLoaded', () => {
   btnEditTitle.addEventListener('click', editActiveMeetingTitle);
   btnDeleteMeeting.addEventListener('click', deleteActiveMeeting);
 
-  // Configurações
+  // Configurações & Ações
   btnToggleSettings.addEventListener('click', toggleSettingsPanel);
-  btnSaveGroqKey.addEventListener('click', saveGroqApiKey);
-  btnSaveBotName.addEventListener('click', saveBotName);
-  fetchGroqKeySettings();
-
-  // Google Drive Configurações & Ações
-  btnSaveGDrive.addEventListener('click', saveGDriveSettings);
-  btnTestGDrive.addEventListener('click', testGDriveConnection);
-  btnSyncDrive.addEventListener('click', syncActiveMeetingToDrive);
-  if (gdriveEnabledInput) {
-    gdriveEnabledInput.addEventListener('change', () => {
-      gdriveFieldsContainer.style.opacity = gdriveEnabledInput.checked ? '1' : '0.6';
-    });
-  }
-  fetchGDriveSettings();
+  if (btnTestGDrive) btnTestGDrive.addEventListener('click', testGDriveConnection);
+  if (btnSyncDrive) btnSyncDrive.addEventListener('click', syncActiveMeetingToDrive);
 
   // Botão de Logout no Header
   const btnLogout = document.getElementById('btnLogout');
@@ -461,185 +441,75 @@ async function fetchGroqKeySettings() {
 }
 
 /**
- * Salva a chave da API do Groq no servidor
+ * Busca as configurações do .env e atualiza os status no painel
  */
-async function saveGroqApiKey() {
-  const apiKey = groqKeyInput.value.trim();
-  if (!apiKey) {
-    alert('Por favor, insira uma chave API válida.');
-    return;
-  }
-
-  btnSaveGroqKey.disabled = true;
-  groqKeyStatus.textContent = 'Salvando...';
-  groqKeyStatus.style.color = 'var(--text-muted)';
-
+async function fetchSystemSettings() {
   try {
-    const response = await fetch('/api/settings/groq-key', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey })
-    });
-    const data = await response.json();
+    // 1. Groq e Bot Name
+    const groqRes = await fetch('/api/settings');
+    const groqData = await groqRes.json();
 
-    if (data.error) {
-      alert(data.error);
+    if (groqData.hasGroqKey) {
+      groqStatusLabel.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #34d399;"></i> Ativa (${groqData.maskedKey})`;
     } else {
-      groqKeyInput.value = '';
-      alert('Chave API do Groq salva com sucesso!');
+      groqStatusLabel.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color: #fca5a5;"></i> Não configurada no .env`;
     }
-  } catch (err) {
-    alert('Erro ao salvar chave: ' + err.message);
-  } finally {
-    btnSaveGroqKey.disabled = false;
-    fetchGroqKeySettings();
-  }
-}
 
-/**
- * Salva o nome de exibição do bot do Google Meet no servidor
- */
-async function saveBotName() {
-  const botName = botNameInput.value.trim();
-  if (!botName) {
-    alert('Por favor, insira um nome válido para o bot.');
-    return;
-  }
+    botNameLabel.textContent = groqData.botName || 'Notetaker Assistant';
 
-  btnSaveBotName.disabled = true;
+    // 2. Google Drive
+    const driveRes = await fetch('/api/settings/gdrive');
+    const driveData = await driveRes.json();
 
-  try {
-    const response = await fetch('/api/settings/bot-name', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ botName })
-    });
-    const data = await response.json();
-
-    if (data.error) {
-      alert(data.error);
+    if (!driveData.enabled) {
+      gdriveStatusLabel.innerHTML = `<i class="fa-solid fa-circle-minus" style="color: var(--text-dark);"></i> Desabilitado (GDRIVE_ENABLED=false)`;
+    } else if (driveData.isConfigured) {
+      const email = driveData.serviceAccountEmail ? ` (${driveData.serviceAccountEmail})` : '';
+      gdriveStatusLabel.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #34d399;"></i> Conectado${email}`;
     } else {
-      alert('Nome do bot salvo com sucesso!');
+      gdriveStatusLabel.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #fca5a5;"></i> Credenciais ausentes no .env`;
     }
-  } catch (err) {
-    alert('Erro ao salvar nome do bot: ' + err.message);
-  } finally {
-    btnSaveBotName.disabled = false;
-    fetchGroqKeySettings();
-  }
-}
 
-/**
- * Busca configurações do Google Drive
- */
-async function fetchGDriveSettings() {
-  try {
-    const res = await fetch('/api/settings/gdrive');
-    const data = await res.json();
-    
-    if (gdriveEnabledInput) {
-      gdriveEnabledInput.checked = Boolean(data.enabled);
-    }
-    if (data.parentFolderId && gdriveParentFolderInput) {
-      gdriveParentFolderInput.value = data.parentFolderId;
-    }
-    
-    if (data.isConfigured) {
-      const emailInfo = data.serviceAccountEmail ? ` (${data.serviceAccountEmail})` : '';
-      gdriveStatusText.innerHTML = `<span style="color: #34d399;"><i class="fa-solid fa-circle-check"></i> Conectado: ${data.serviceAccountEmail || 'Credenciais ativas'}</span>`;
-      if (gdriveJsonInput) {
-        gdriveJsonInput.placeholder = `Credencial JSON já configurada${emailInfo}.\n(Cole novo JSON apenas se quiser substituir)`;
-      }
-    } else {
-      gdriveStatusText.innerHTML = `<span style="color: #fca5a5;"><i class="fa-solid fa-circle-exclamation"></i> Não configurado</span>`;
-      if (gdriveJsonInput) {
-        gdriveJsonInput.placeholder = '{"type": "service_account", "project_id": ...}';
+    // Badge geral
+    if (settingsStatusBadge) {
+      if (groqData.hasGroqKey) {
+        settingsStatusBadge.textContent = '🟢 Pronto';
+        settingsStatusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+        settingsStatusBadge.style.color = '#34d399';
+      } else {
+        settingsStatusBadge.textContent = '🟡 Pendente';
+        settingsStatusBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+        settingsStatusBadge.style.color = '#fde047';
       }
     }
   } catch (err) {
-    console.error('Erro ao buscar status do Google Drive:', err);
-    if (gdriveStatusText) {
-      gdriveStatusText.textContent = 'Erro ao consultar status do Drive.';
-    }
+    console.error('Erro ao consultar configurações:', err);
   }
 }
 
 /**
- * Salva as configurações do Google Drive
- */
-async function saveGDriveSettings() {
-  if (!btnSaveGDrive) return;
-  btnSaveGDrive.disabled = true;
-  gdriveStatusText.textContent = 'Salvando configurações...';
-
-  try {
-    const payload = {
-      enabled: gdriveEnabledInput.checked,
-      parentFolderId: gdriveParentFolderInput.value.trim()
-    };
-    
-    const jsonVal = gdriveJsonInput.value.trim();
-    if (jsonVal) {
-      payload.serviceAccountJson = jsonVal;
-    }
-
-    const res = await fetch('/api/settings/gdrive', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-
-    if (data.error) {
-      alert(data.error);
-    } else {
-      alert('Configurações do Google Drive salvas com sucesso!');
-      gdriveJsonInput.value = '';
-      fetchGDriveSettings();
-    }
-  } catch (err) {
-    alert('Erro ao salvar configurações do Drive: ' + err.message);
-  } finally {
-    btnSaveGDrive.disabled = false;
-  }
-}
-
-/**
- * Testa a conexão com o Google Drive
+ * Testa a conexão com o Google Drive baseado nas credenciais do .env
  */
 async function testGDriveConnection() {
   if (!btnTestGDrive) return;
   btnTestGDrive.disabled = true;
-  gdriveStatusText.innerHTML = '<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Testando conexão...</span>';
+  btnTestGDrive.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testando...';
 
   try {
-    const payload = {
-      GDRIVE_ENABLED: gdriveEnabledInput.checked,
-      GDRIVE_PARENT_FOLDER_ID: gdriveParentFolderInput.value.trim()
-    };
-    if (gdriveJsonInput.value.trim()) {
-      payload.GDRIVE_SERVICE_ACCOUNT_JSON = gdriveJsonInput.value.trim();
-    }
-
-    const res = await fetch('/api/settings/gdrive/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const res = await fetch('/api/settings/gdrive/test', { method: 'POST' });
     const data = await res.json();
 
     if (data.success) {
-      gdriveStatusText.innerHTML = `<span style="color: #34d399;"><i class="fa-solid fa-circle-check"></i> ${data.message} Conta: ${data.email || ''}</span>`;
-      alert(`Sucesso! Conexão verificada.\nPasta "321gravando" pronta no Google Drive.`);
-      fetchGDriveSettings();
+      alert(`Sucesso! Conexão verificada com o Google Drive.\nConta: ${data.email || 'Service Account'}\nPasta "${data.rootFolderName || '321gravando'}" pronta no Drive!`);
+      fetchSystemSettings();
     } else {
-      gdriveStatusText.innerHTML = `<span style="color: #fca5a5;"><i class="fa-solid fa-triangle-exclamation"></i> ${data.message}</span>`;
       alert(`Falha no teste: ${data.message}`);
     }
   } catch (err) {
-    gdriveStatusText.innerHTML = `<span style="color: #fca5a5;">Erro no teste: ${err.message}</span>`;
+    alert('Erro no teste: ' + err.message);
   } finally {
     btnTestGDrive.disabled = false;
+    btnTestGDrive.innerHTML = '<i class="fa-solid fa-plug"></i> Testar Conexão Drive';
   }
 }
 

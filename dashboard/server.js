@@ -21,100 +21,14 @@ const AUTH_CODE = '123gravar';
 const currentDir = path.resolve();
 const publicDir = path.join(currentDir, 'dashboard', 'public');
 const mediaDir = path.join(publicDir, 'media');
-const configFilePath = path.join(mediaDir, 'config.json');
 
-// Garante as pastas necessárias
+// Garante que a pasta de mídias existe
 if (!fs.existsSync(mediaDir)) {
   fs.mkdirSync(mediaDir, { recursive: true });
 }
 
-// Carrega configurações do .env e do config.json no volume persistente
-function loadPersistentSettings() {
-  const envPath = path.join(currentDir, '.env');
-  if (fs.existsSync(envPath)) {
-    try {
-      const stat = fs.statSync(envPath);
-      if (stat.isFile()) {
-        dotenv.config();
-      }
-    } catch (e) {
-      console.warn('[Settings] Não foi possível carregar o arquivo .env:', e.message);
-    }
-  }
-
-  if (fs.existsSync(configFilePath)) {
-    try {
-      const configData = JSON.parse(fs.readFileSync(configFilePath, 'utf-8'));
-      if (configData.GROQ_API_KEY) {
-        process.env.GROQ_API_KEY = configData.GROQ_API_KEY;
-      }
-      if (configData.BOT_NAME) {
-        process.env.BOT_NAME = configData.BOT_NAME;
-      }
-      if (configData.GDRIVE_ENABLED !== undefined) {
-        process.env.GDRIVE_ENABLED = String(configData.GDRIVE_ENABLED);
-      }
-      if (configData.GDRIVE_KEY_FILE) {
-        process.env.GDRIVE_KEY_FILE = configData.GDRIVE_KEY_FILE;
-      }
-      if (configData.GDRIVE_SERVICE_ACCOUNT_JSON) {
-        process.env.GDRIVE_SERVICE_ACCOUNT_JSON = configData.GDRIVE_SERVICE_ACCOUNT_JSON;
-      }
-      if (configData.GDRIVE_PARENT_FOLDER_ID) {
-        process.env.GDRIVE_PARENT_FOLDER_ID = configData.GDRIVE_PARENT_FOLDER_ID;
-      }
-      console.log('[Settings] Configurações carregadas com sucesso do config.json no volume persistente.');
-    } catch (e) {
-      console.error('[Settings] Erro ao analisar o config.json:', e.message);
-    }
-  }
-}
-
-loadPersistentSettings();
-
-// Helper para salvar de forma persistente e segura contra erros do Docker (.env como pasta)
-function saveSettings(key, value) {
-  process.env[key] = value;
-
-  // Salva no config.json do volume persistente de mídias
-  let configData = {};
-  if (fs.existsSync(configFilePath)) {
-    try {
-      configData = JSON.parse(fs.readFileSync(configFilePath, 'utf-8'));
-    } catch (e) {
-      configData = {};
-    }
-  }
-  configData[key] = value;
-  fs.writeFileSync(configFilePath, JSON.stringify(configData, null, 2), 'utf-8');
-
-  // Tenta salvar no .env local (se for arquivo e não pasta criada pelo Docker)
-  const envPath = path.join(currentDir, '.env');
-  try {
-    if (fs.existsSync(envPath) && fs.statSync(envPath).isDirectory()) {
-      return;
-    }
-    let content = '';
-    if (fs.existsSync(envPath)) {
-      content = fs.readFileSync(envPath, 'utf-8');
-    }
-    const lines = content.split('\n');
-    let found = false;
-    const newLines = lines.map(line => {
-      if (line.trim().startsWith(`${key}=`)) {
-        found = true;
-        return `${key}=${value}`;
-      }
-      return line;
-    });
-    if (!found) {
-      newLines.push(`${key}=${value}`);
-    }
-    fs.writeFileSync(envPath, newLines.join('\n'), 'utf-8');
-  } catch (e) {
-    console.warn(`[Settings] Não foi possível salvar no .env: ${e.message}`);
-  }
-}
+// Carrega variáveis do .env
+dotenv.config();
 
 function parseCookies(cookieHeader) {
   const list = {};
@@ -779,47 +693,32 @@ app.get('/api/settings', (req, res) => {
 });
 
 /**
- * API: Salvar chave API do Groq no config.json e na memória
+ * API: Obter configurações gerais do .env
  */
-app.post('/api/settings/groq-key', (req, res) => {
-  const { apiKey } = req.body;
-
-  if (!apiKey || !apiKey.trim()) {
-    return res.status(400).json({ error: 'Chave API inválida.' });
+app.get('/api/settings', (req, res) => {
+  const apiKey = process.env.GROQ_API_KEY || '';
+  const isConfigured = Boolean(apiKey && apiKey !== 'sua_chave_aqui');
+  const botName = process.env.BOT_NAME || 'Notetaker Assistant';
+  
+  // Mascara a chave para segurança
+  let maskedKey = '';
+  if (isConfigured) {
+    if (apiKey.length <= 8) {
+      maskedKey = '••••';
+    } else {
+      maskedKey = apiKey.slice(0, 4) + '••••' + apiKey.slice(-4);
+    }
   }
 
-  try {
-    saveSettings('GROQ_API_KEY', apiKey.trim());
-    console.log('[Dashboard API] Chave API do Groq salva de forma persistente.');
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[Dashboard API] Erro ao salvar chave API:', err);
-    res.status(500).json({ error: 'Erro ao salvar chave API no volume de mídias.' });
-  }
+  res.json({
+    hasGroqKey: isConfigured,
+    maskedKey,
+    botName
+  });
 });
 
 /**
- * API: Salvar o nome do bot do Google Meet no config.json e na memória
- */
-app.post('/api/settings/bot-name', (req, res) => {
-  const { botName } = req.body;
-
-  if (!botName || !botName.trim()) {
-    return res.status(400).json({ error: 'Nome de bot inválido.' });
-  }
-
-  try {
-    saveSettings('BOT_NAME', botName.trim());
-    console.log(`[Dashboard API] Nome do bot salvo com sucesso: "${botName.trim()}"`);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[Dashboard API] Erro ao salvar nome do bot:', err);
-    res.status(500).json({ error: 'Erro ao salvar o nome do bot no volume de mídias.' });
-  }
-});
-
-/**
- * API: Obter configurações do Google Drive
+ * API: Obter status de integração com Google Drive do .env
  */
 app.get('/api/settings/gdrive', (req, res) => {
   const config = getDriveConfig();
@@ -861,45 +760,11 @@ app.get('/api/settings/gdrive', (req, res) => {
 });
 
 /**
- * API: Salvar configurações do Google Drive
- */
-app.post('/api/settings/gdrive', (req, res) => {
-  const { enabled, keyFile, serviceAccountJson, parentFolderId } = req.body;
-
-  try {
-    if (enabled !== undefined) {
-      saveSettings('GDRIVE_ENABLED', String(enabled));
-    }
-    if (keyFile !== undefined) {
-      saveSettings('GDRIVE_KEY_FILE', keyFile.trim());
-    }
-    if (serviceAccountJson !== undefined && serviceAccountJson.trim() !== '') {
-      // Valida se é JSON válido
-      try {
-        JSON.parse(serviceAccountJson.trim());
-        saveSettings('GDRIVE_SERVICE_ACCOUNT_JSON', serviceAccountJson.trim());
-      } catch (jsonErr) {
-        return res.status(400).json({ error: `JSON de credenciais inválido: ${jsonErr.message}` });
-      }
-    }
-    if (parentFolderId !== undefined) {
-      saveSettings('GDRIVE_PARENT_FOLDER_ID', parentFolderId.trim());
-    }
-
-    console.log('[Dashboard API] Configurações do Google Drive salvas com sucesso.');
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[Dashboard API] Erro ao salvar configurações do Google Drive:', err);
-    res.status(500).json({ error: 'Erro ao salvar configurações do Google Drive.' });
-  }
-});
-
-/**
  * API: Testar conexão com o Google Drive
  */
 app.post('/api/settings/gdrive/test', async (req, res) => {
   try {
-    const testResult = await testDriveConnection(req.body);
+    const testResult = await testDriveConnection();
     res.json(testResult);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

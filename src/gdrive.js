@@ -6,13 +6,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 /**
- * Carrega a configuração do Google Drive a partir dos parâmetros fornecidos,
- * variáveis de ambiente ou arquivo de configuração persistente.
+ * Carrega a configuração do Google Drive diretamente do .env
  * @param {Object} [customConfig] - Configurações opcionais passadas explicitamente.
  * @returns {Object} Configuração consolidada do Google Drive.
  */
 export function getDriveConfig(customConfig = {}) {
-  // 1. Tenta pegar de customConfig
   let keyFile = customConfig.GDRIVE_KEY_FILE || process.env.GDRIVE_KEY_FILE || '';
   let serviceAccountJson = customConfig.GDRIVE_SERVICE_ACCOUNT_JSON || process.env.GDRIVE_SERVICE_ACCOUNT_JSON || '';
   let parentFolderId = customConfig.GDRIVE_PARENT_FOLDER_ID || process.env.GDRIVE_PARENT_FOLDER_ID || '';
@@ -20,37 +18,13 @@ export function getDriveConfig(customConfig = {}) {
     ? (customConfig.GDRIVE_ENABLED === true || customConfig.GDRIVE_ENABLED === 'true')
     : (process.env.GDRIVE_ENABLED === 'true' || process.env.GDRIVE_ENABLED === '1');
 
-  // 2. Se houver config.json em dashboard/public/media, verifica se tem overrides
-  const configFilePath = path.join(process.cwd(), 'dashboard', 'public', 'media', 'config.json');
-  if (fs.existsSync(configFilePath)) {
-    try {
-      const persistedConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf-8'));
-      if (persistedConfig.GDRIVE_KEY_FILE && !customConfig.GDRIVE_KEY_FILE) {
-        keyFile = persistedConfig.GDRIVE_KEY_FILE;
-      }
-      if (persistedConfig.GDRIVE_SERVICE_ACCOUNT_JSON && !customConfig.GDRIVE_SERVICE_ACCOUNT_JSON) {
-        serviceAccountJson = persistedConfig.GDRIVE_SERVICE_ACCOUNT_JSON;
-      }
-      if (persistedConfig.GDRIVE_PARENT_FOLDER_ID && !customConfig.GDRIVE_PARENT_FOLDER_ID) {
-        parentFolderId = persistedConfig.GDRIVE_PARENT_FOLDER_ID;
-      }
-      if (persistedConfig.GDRIVE_ENABLED !== undefined && customConfig.GDRIVE_ENABLED === undefined) {
-        enabled = (persistedConfig.GDRIVE_ENABLED === true || persistedConfig.GDRIVE_ENABLED === 'true');
-      }
-    } catch (e) {
-      // Ignora erro de leitura silenciosamente
-    }
-  }
-
-  // Se nenhum arquivo específico foi configurado, busca automaticamente por arquivos de credenciais
+  // Se nenhum arquivo específico foi configurado no .env, busca automaticamente na raiz ou media
   if (!keyFile && !serviceAccountJson) {
     const candidateFiles = [
       path.join(process.cwd(), 'gdrive-credentials.json'),
       path.join(process.cwd(), 'gdrive-credentials.json.json'),
       path.join(process.cwd(), 'credentials.json'),
-      path.join(process.cwd(), 'dashboard', 'public', 'media', 'gdrive-credentials.json'),
-      path.join(process.cwd(), 'dashboard', 'public', 'media', 'gdrive-credentials.json.json'),
-      path.join(process.cwd(), 'dashboard', 'public', 'media', 'credentials.json')
+      path.join(process.cwd(), 'dashboard', 'public', 'media', 'gdrive-credentials.json')
     ];
 
     for (const candidate of candidateFiles) {

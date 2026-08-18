@@ -48,12 +48,14 @@ O **321gravando** suporta envio automático de todas as gravações e atas para 
    - No seu Google Drive pessoal (ou compartilhado), crie uma pasta chamada `321gravando` (ou use a raiz).
    - Clique com o botão direito na pasta > **Compartilhar** > Cole o e-mail da sua Service Account com permissão de **Editor**.
 
-3. **Ativar no 321gravando**:
-   - Abra o dashboard em `http://localhost:8080`.
-   - Clique em **"Configurações da API"** no rodapé da barra lateral.
-   - Marque **"Sincronizar Google Drive"**.
-   - Cole o conteúdo do JSON baixado no campo correspondente (ou salve o arquivo como `gdrive-credentials.json` na raiz do projeto).
-   - Clique em **"Testar"** para validar o acesso e depois em **"Salvar Drive"**. Pronto!
+3. **Configurar o `.env`**:
+   - Salve o arquivo de credenciais baixado na raiz como `gdrive-credentials.json`.
+   - No seu arquivo `.env`, defina:
+     ```env
+     GDRIVE_ENABLED=true
+     GDRIVE_KEY_FILE=./gdrive-credentials.json
+     ```
+   - No dashboard web, você pode clicar em **"Status do Sistema"** na barra lateral e usar o botão **"Testar Conexão Drive"** para confirmar que está tudo conectado!
 
 ---
 
